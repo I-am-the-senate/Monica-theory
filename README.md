@@ -298,10 +298,3 @@ Full paper: `monica_theory_zh.tex` (Chinese academic version, 2026).
 
 MIT License. See `LICENSE` for details.
 
----
-
-## Documentation
-
-- English paper (LaTeX): [`docs/monica_theory_en.tex`](docs/monica_theory_en.tex)
-- Chinese paper (LaTeX): [`docs/monica_theory_zh.tex`](docs/monica_theory_zh.tex)
-
