@@ -1,0 +1,92 @@
+api:
+  endpoint: http://localhost:8000
+  api_key: EMPTY
+  model: Qwen/Qwen2.5-3B-Instruct-GPTQ-Int4
+network:
+  num_agents: 20
+  rounds: 5
+  max_concurrent: 20
+  ctx_size: 8192
+  max_tokens: 128
+  bits: 5
+  neighbors_near: 1
+  neighbors_far: 1
+  comm_mode: all
+idle_wake:
+  enabled: true
+  timeout_ms: 1000
+  message: 网络启动，请向邻居发送消息，推动协作传播
+  targets:
+  - 1
+  - 2
+  - 3
+context:
+  history_token_budget: 2048
+  history_turns_max: 32
+  memory_max_chars: 100
+tools:
+  msg:
+    enabled: true
+    tag_open: <S>
+    tag_close: </S>
+    description: 向其他节点发消息
+    max_targets: 20
+    max_msg_chars: 200
+  read:
+    enabled: true
+    tag_open: <R>
+    tag_close: </R>
+    description: 读取用户输入或记忆
+    read_input_max: 400
+    read_output_tail: 100
+  add:
+    enabled: true
+    tag_open: <E>
+    tag_close: </E>
+    description: 向共享输出追加一个字符
+  memory:
+    enabled: true
+    tag_open: <M>
+    tag_close: </M>
+    description: 'overwrite your 100-char memory. Format: <M>{v:text}</M>'
+system_prompt: '你是节点{name}，共{num_agents}个节点。任务：{task}
+
+  收件箱：{inbox}
+
+  {comm_hint}
+
+  只能输出工具调用，普通文字丢弃：
+
+  <S>{{"t":[{nb_json}],"m":"内容"}}</S>
+
+  <M>{{"v":"笔记"}}</M>
+
+  <E>X</E>  （向共享输出追加单个字符，X为任意字符）
+
+  '
+history:
+  turns: 32
+files:
+  input: monica_input.txt
+  output: monica_output.txt
+  mem_dir: monica_memory
+gui:
+  window_size: 1340x800
+  refresh_ms: 600
+  theme:
+    bg_primary: '#1e1e2e'
+    bg_secondary: '#2a2a3e'
+    bg_dark: '#181825'
+    bg_toolbar: '#313244'
+    fg_primary: '#cdd6f4'
+    fg_accent: '#cba6f7'
+    fg_muted: '#6c7086'
+    fg_green: '#a6e3a1'
+    fg_orange: '#fab387'
+    fg_red: '#f38ba8'
+    fg_blue: '#89b4fa'
+logging:
+  level: INFO
+  format: '%(asctime)s [%(levelname)s] %(message)s'
+  datefmt: '%H:%M:%S'
+task: ''
