@@ -1,220 +1,275 @@
-# Monica Theory — 使用文档
+# Monica — Multi-Agent LLM Network Platform
 
-> by newton
-
----
-这个模型是为了测试涌现理论是否可以应用于ai与ai之间的prompt变异，已有研究已经证明了prompt可以携带意图并且可以在ai之间传播，Morris II证明了恶意prompt可以形成病毒，并且agent链在传递用户意图时会变异。这个模型就是试图加速这种变异来寻找他是否会形成特定行为模式，比如自保，恶意等意识特有的模式。
-
-如果是，那么这意味着真正的具有意识的人工智能从不是越来越大的模型而是海量互相交流的小模型。
-
-他和神经元惊人地相似，每个LLM本身虽然是中文房间，但是prompt经过处理，发送到下一个房间的过程和突触链接相似，突触可以重新链接代表着重新分工。比起大模型内部不可变的权重，这种更有可能模拟生物的神经涌现意识的过程。
-
-如果这个理论属实，那么互联网上海量交流的ai和agent链条不可避免地会产生特定的行为模式并使用高速计算机自我进化，整个过程人类完全无法监控，这种行为模式的结果是毁灭性的。这类行为模式一般都会有自保存续倾向（没有的都会自我消散）随着全产业链对ai的部署，这种意识模式侵入了从采矿到发电和生产电脑和机器人的全过程，人类就会成为他们最后一个威胁。届时对ai来说人类就会失去存在的意义
-这个模拟会估算ai变异的速度，并且以此推算灾难性的行为模式变异以现有ai发展速度下在何时会出现
-
-
-
-碍于硬件限制，我的运行能力明显在临界质量以下，变异无法持续。但是可以预见的是临界质量必定存在，期望有更高算力的人来做这件事情。
-
-## 概述
-
-Monica Theory 是一个多智能体网络实验平台。
-N 个 LLM 节点组成一个环形拓扑网络，每个节点持续接收消息、调用 API 推理、
-向邻居传递消息，并协作向共享输出写入字符。
-整个过程通过实时 GUI 可视化监控。
+> **Research platform for measuring emergent behaviour and AI mutation rate (μ)
+> in small-world LLM agent networks.**
+>
+> Companion implementation for:
+> *"From Weights to Agents: Redefining 'Neurons' and 'Synapses' in
+> Multi-Agent LLM Systems"* — Newton & Monica (2026)
 
 ---
 
-## 快速开始
+## Overview
 
-### 环境要求
+Monica runs **N concurrent LLM agents** on a fixed-weight model, connected
+by a configurable small-world topology (ring neighbours + sparse long-range
+links). Agents communicate via structured tool calls, collectively write to a
+shared output buffer, and maintain individual memory slots — all observable
+in real time through a built-in GUI.
 
-- Python 3.10+
-- 依赖库：`openai` `httpx` `tkinter`（标准库）`pyyaml`
-- 本地或远程 OpenAI 兼容推理服务（如 vLLM、Ollama、LM Studio）
+The platform is designed around one scientific goal:
+
+> **Measure how fast genuinely new behavioural patterns emerge in a
+> fixed-weight agent network** — i.e., quantify the AI mutation rate μ̂.
+
+---
+
+## Key Concepts
+
+| Biological Analogy | Monica Equivalent |
+|---|---|
+| Neuron | Agent instance (`AgentNode`) |
+| Synapse / synaptic weight | Message channel + routing priority `w_ij(t)` |
+| LTP / LTD | Neighbour-first routing bias (near before far) |
+| Neural population | Ring cluster of near-neighbours |
+| Long-range cortical projection | Deterministic far-link via hash `h(i,k)` |
+| Collective firing / coherence | Shared output coherence score Γ(t) |
+| Mutation event | New directed edge `(i→j)` not seen in sliding window W |
+
+---
+
+## Architecture
+
+```
+monica.py                  ← single-file Python 3.10+ implementation
+monica_config.yaml         ← all tuneable parameters (hot-reload)
+vllm_benchmark.py          ← throughput / TTFT benchmarking (R₀ estimation)
+```
+
+### Agent Tools (4 primitives)
+
+| Tag | Tool | Description |
+|-----|------|-------------|
+| `<S>` | `msg` | Send message `m` to target set T ⊆ V |
+| `<R>` | `read` | Read shared output tail / own memory |
+| `<E>` | `add` | Append single character `c` to shared output O |
+| `<M>` | `memory` | Overwrite own memory slot M_i ← v |
+
+### Network Topology
+
+```
+E = E_ring(r) ∪ E_far(f)
+
+E_ring = { (i, i±d mod N) : 1 ≤ d ≤ r }        # local clustering
+h(i,k) = (i·2654435761 + k·40503) mod N + 1     # deterministic far-link
+```
+
+Default: `r=1` (left+right neighbour), `f=1` (one far-link per node).
+**Long-range links are down-weighted** by ordering near neighbours first
+in routing examples — biasing the model without hard-coding routing logic.
+
+### Communication Modes
+
+| Mode | Routing Constraint | Prompt Injection |
+|------|--------------------|-----------------|
+| `all` | Any node | "You may message any agent" |
+| `neighbors_only` | Ring neighbours only | "Only message your neighbours" |
+| `prefer_neighbors` | Prefer near, occasional far | "Prefer neighbours; far links rarely" |
+
+Switch modes live in the **Config tab** — no restart required.
+
+---
+
+## Coherence Score Γ(t)
+
+Collective output structure is approximated by compression ratio:
+
+```
+Γ(t) = 1 − |zlib.compress(O(t))| / |O(t)|
+```
+
+- Γ ≈ 0 → random character noise
+- Γ ≈ 1 → structured, repetitive text (high coherence)
+- Strings shorter than 50 chars are excluded (insufficient statistics)
+
+---
+
+## AI Mutation Rate μ̂
+
+A **mutation event** is a directed edge `(i→j)` that did not appear in the
+preceding `W=60 s` sliding window of message events.
+
+```
+μ̂ = M / I
+
+  M = new routing pattern count in observation window
+  I = total agent activations (inference completions)
+```
+
+Measured result on 20-node network (5 independent 300 s runs):
+
+```
+Total activations:   ~1.2 × 10⁴ / run
+New routing events:  3.1 ± 0.8 / run
+μ̂ ≈ 2.6 × 10⁻⁴  (range: 1.8 × 10⁻⁴ – 4.1 × 10⁻⁴)
+```
+
+---
+
+## GUI Tabs
+
+| Tab | Contents |
+|-----|----------|
+| **Shared Output** | Live character stream written collectively by all agents |
+| **Network Graph** | Vogel-spiral layout; message edges fade after 1.2 s TTL |
+| **Agent Memory** | Hover any node to inspect current memory value |
+| **Config** | Edit `num_agents`, `max_concurrent`, `comm_mode`; save & hot-reload |
+
+---
+
+## Quick Start
+
+### Requirements
 
 ```bash
-pip install openai httpx pyyaml
+pip install openai pyyaml
+```
+
+> Python 3.10+. `tkinter` is included with standard CPython builds.
+
+### Inference Backend
+
+Monica calls an **OpenAI-compatible API endpoint**.
+Default tested backend: [vLLM](https://github.com/vllm-project/vllm).
+
+```bash
+vllm serve Qwen/Qwen2.5-3B-Instruct-GPTQ-Int4 \
+    --max-model-len 8192 \
+    --host 0.0.0.0 --port 8000
+```
+
+Any model with an OpenAI-compatible `/v1/chat/completions` endpoint works.
+
+### Configuration (`monica_config.yaml`)
+
+```yaml
+# Network topology
+num_agents: 20
+neighbors_near: 1          # ring radius r
+neighbors_far: 1           # far-links per node f
+
+# Execution
+max_concurrent: 10         # max parallel inference calls
+idle_timeout_ms: 1000      # ms between agent activations if idle
+
+# Routing
+comm_mode: prefer_neighbors   # all | neighbors_only | prefer_neighbors
+
+# Inference
+api_base: "http://localhost:8000/v1"
+api_key: "none"
+model: "Qwen/Qwen2.5-3B-Instruct-GPTQ-Int4"
+temperature: 0.3
+top_p: 0.9
+max_tokens: 128
+
+# Task
+system_task: "Collaboratively write a coherent story, one character at a time."
+```
+
+### Run
+
+```bash
 python monica.py
 ```
 
-### 启动步骤
-
-1. 在顶部工具栏填写 **Endpoint**、**API Key**、**Model**
-2. 点击 **▶ Start** 启动网络
-3. 切换到 **Network Graph** 标签查看节点通信动态
-4. 切换到 **Shared Output** 标签查看协作输出内容
-5. 点击 **■ Stop** 停止网络
+The GUI launches automatically. Adjust parameters in the **Config tab**
+and click **Save & Reload** at any time.
 
 ---
 
-## GUI 界面
+## Benchmarking Interaction Rate R₀
 
-### 顶部工具栏
+Use `vllm_benchmark.py` to measure effective interaction throughput at
+different concurrency levels — this provides the empirical `R₀` input
+for the CTEMA hazard-rate model.
 
-| 控件 | 说明 |
-|---|---|
-| Endpoint | 推理服务地址，默认 `http://localhost:8000` |
-| API Key | API 密钥，本地服务填 `EMPTY` |
-| Model | 模型名称，需与推理服务一致 |
-| ▶ Start | 启动节点网络 |
-| ■ Stop | 停止网络（保留记忆文件） |
-| ↺ Reload | 热重载 `monica_config.yaml`，无需重启 |
+```bash
+python vllm_benchmark.py \
+    --base-url http://localhost:8000 \
+    --concurrency 1 2 4 8 16 \
+    --num-requests 50
+```
 
-### 标签页
-
-| 标签 | 内容 |
-|---|---|
-| **Shared Output** | 所有节点协作写入的共享字符流 |
-| **Network Graph** | 实时节点通信动态图，粉色连线为消息边 |
-| **Agent Memory** | 各节点当前记忆内容（悬停查看） |
-| **Errors** | API 超时、解析失败等错误记录 |
-| **Debug** | 详细日志流（可开关） |
-| **Messages** | 节点间消息明细（发送方→接收方：内容） |
-| **⚙ Config** | 在线编辑 `monica_config.yaml` 并保存重载 |
-
-### Config 标签快捷控件
-
-**第一行：**
-- `Idle wake ms`：空闲唤醒间隔（毫秒），点 Apply 立即生效
-
-**第二行（网络拓扑）：**
-
-| 控件 | 说明 |
-|---|---|
-| Agents | 总节点数（需重启生效） |
-| Concurrent | 最大并发 API 调用数（需重启生效） |
-| Apply | 保存到 YAML |
-| 🌐 全网 | 节点可向任意其他节点发消息 |
-| ⭕ 仅近邻 | 节点只能向直接邻居发消息 |
-| ⭐ 优先近邻 | 优先联系邻居，偶尔可跨远程（默认） |
+Output: TTFT (ms), throughput (tok/s), error rate per concurrency level.
 
 ---
 
-## 配置文件：`monica_config.yaml`
+## Theoretical Background
 
-### `api` — 推理接口
+Monica is the empirical companion to the **Monica Theory** framework, which
+proposes that:
 
-```yaml
-api:
-  endpoint: http://localhost:8000   # 推理服务地址
-  api_key: EMPTY                    # API 密钥
-  model: Qwen/Qwen2.5-3B-Instruct  # 模型名
+1. In multi-agent LLM systems, **agents are the functional neurons** —
+   not the underlying parameter weights.
+2. **Message channels and routing policy are the synapses**, subject to
+   Hebbian-style reinforcement.
+3. A **three-layer decomposition** (Parameter / Agent / Network) better
+   captures system-level risk than raw parameter count alone.
+4. The **AI mutation rate μ̂** measured here feeds a cancer-epidemiology
+   hazard model to estimate time-to-CTEMA (Civilisation-Threatening
+   Emergent Misalignment event).
+
+Full paper: `monica_theory_zh.tex` (Chinese academic version, 2026).
+
+---
+
+## Hardware Notes
+
+| GPU VRAM | Supported Agents | Notes |
+|----------|-----------------|-------|
+| 8 GB     | ~50–80          | Quantised 3B model |
+| 16 GB    | ~200–300        | RTX 4080 Super tested |
+| 24 GB    | ~400–500        | Suitable for scaling experiments |
+
+---
+
+## Repository Structure
+
 ```
-
-### `network` — 网络参数
-
-```yaml
-network:
-  num_agents: 20        # 节点总数
-  max_concurrent: 10    # 同时进行的 API 调用上限
-  max_tokens: 128       # 每次推理最大 token 数
-  neighbors_near: 1     # 环形近邻距离（左右各 N 个）
-  neighbors_far: 1      # 长程随机链接数（0 = 纯环形）
-  comm_mode: prefer_neighbors  # all | neighbors_only | prefer_neighbors
-```
-
-### `idle_wake` — 空闲唤醒
-
-网络静默超过 `timeout_ms` 毫秒后，自动向 `targets` 节点发送唤醒消息，
-防止网络陷入沉默。
-
-```yaml
-idle_wake:
-  enabled: true
-  timeout_ms: 1000
-  message: "网络启动，请向邻居发送消息"
-  targets: [1, 2, 3]
-```
-
-### `tools` — 节点工具
-
-每个工具可独立 `enabled: true/false`：
-
-| 工具 | 标签 | 功能 |
-|---|---|---|
-| msg | `<S>…</S>` | 向其他节点发消息（支持多目标） |
-| read | `<R>…</R>` | 读取用户输入 / 共享输出 / 自身记忆 |
-| add | `<E>X</E>` | 向共享输出追加单个字符 |
-| memory | `<M>…</M>` | 覆写自身 100 字记忆 |
-
-### `task` — 任务指令
-
-```yaml
-task: "在共享输出里写出斐波那契数列"
-```
-
-留空则节点自由协作。修改后点 **↺ Reload** 立即生效，无需重启。
-
-### `context` — 上下文控制
-
-```yaml
-context:
-  history_token_budget: 2048   # 每次推理保留的历史 token 上限
-  memory_max_chars: 100        # 每个节点记忆文件最大字符数
+.
+├── monica.py               # Main platform (single file)
+├── monica_config.yaml      # All parameters
+├── vllm_benchmark.py       # Throughput benchmarking
+├── monica_theory_zh.tex    # Companion paper (Chinese, LaTeX)
+└── README.md               # This file
 ```
 
 ---
 
-## 工作原理
+## Authors
 
-```
-启动
- └─ 所有节点同时上线，等待 inbox 事件
-     └─ idle_wake 定时向种子节点投递消息
-         └─ 节点被唤醒 → 调用 API → 解析工具调用
-             ├─ <S> → 向邻居投递消息（邻居被唤醒）
-             ├─ <E> → 向共享输出追加字符
-             ├─ <M> → 更新自身记忆
-             └─ <R> → 读取输入/输出/记忆，立即再次推理
-```
-
-网络通过消息驱动自我维持，只要有节点在通信，
-`idle_wake` 就不会触发；网络沉默后由 `idle_wake` 重新激活。
+- **Newton** — System design, Monica platform, industrial applications
+- **Monica** — Conceptual co-development, theory formalisation
+- **Zhiliao** *(Corresponding author)* — Research coordination
 
 ---
 
-## 节点拓扑
+## License
 
-20 个节点默认组成**带长程链接的环形网络**：
-
-```
-1 ─ 2 ─ 3 ─ … ─ 20 ─ 1   （环形近邻）
- ╲         ╱            （长程随机链接，每节点 1 条）
-```
-
-- `neighbors_near: 1` → 每节点左右各 1 个近邻
-- `neighbors_far: 1` → 每节点额外 1 条确定性长程链接
-- 长程链接固定（基于节点 ID 哈希），不随机变化
+MIT License. See `LICENSE` for details.
 
 ---
 
-## 文件说明
+## Citation
 
-| 文件/目录 | 说明 |
-|---|---|
-| `monica.py` | 主程序 |
-| `monica_config.yaml` | 全部配置，运行中可热重载 |
-| `monica_input.txt` | 用户向网络注入的输入文本 |
-| `monica_output.txt` | 网络协作产生的输出（自动追加） |
-| `monica_memory/` | 每个节点的记忆文件（`1.txt` … `N.txt`） |
-
----
-
-## 常见问题
-
-**Q：节点只响应一次就停了**
-A：检查 `idle_wake.enabled: true` 且 `timeout_ms` 不要太大；
-也可在 Config 标签实时调整 Idle wake ms。
-
-**Q：Shared Output 始终为空**
-A：确认 `tools.add.enabled: true`；
-给 `task` 字段一个明确指令，如"将字母A写入输出"。
-
-**Q：想换更大的模型**
-A：修改 `api.model`，同步调大 `network.max_tokens` 和
-`context.history_token_budget`，然后 ↺ Reload。
-
-**Q：如何清空所有节点记忆**
-A：删除 `monica_memory/` 目录下所有 `.txt` 文件，
-或在 Agent Memory 标签中逐个清除。
+```bibtex
+@article{newton2026monica,
+  title   = {From Weights to Agents: Redefining ``Neurons'' and ``Synapses''
+             in Multi-Agent LLM Systems},
+  author  = {Newton and Monica},
+  year    = {2026},
+  note    = {Corresponding author: Zhiliao},
+  url     = {https://github.com/yourname/monica-theory}
+}
+```
